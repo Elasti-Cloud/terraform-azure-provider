@@ -21,12 +21,43 @@ resource "azurerm_virtual_network" "vnet" {
 
 # Create subnets
 resource "azurerm_subnet" "subnet" {
-  count                = length(var.subnet["names"])
-  name                 = var.subnet["names"][count.index]
+  for_each             = var.subnet
+  name                 = each.key
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.subnet["cidrs"][count.index]]
+  address_prefixes     = [each.value]
 }
+
+# Create NSG for subnets
+resource "azurerm_network_security_group" "nsg" {
+  for_each            = var.nsg
+  name                = each.key
+  location            = var.rg["location"]
+  resource_group_name = azurerm_resource_group.rg.name
+
+  dynamic "security_rule" {
+    for_each = each.value
+    content {
+      name                       = security_rule.value["name"]
+      priority                   = security_rule.value["priority"]
+      direction                  = security_rule.value["direction"]
+      access                     = security_rule.value["access"]
+      protocol                   = security_rule.value["protocol"]
+      source_port_range          = security_rule.value["source_port_range"]
+      destination_port_range     = security_rule.value["destination_port_range"]
+      source_address_prefix      = security_rule.value["source_address_prefix"]
+      destination_address_prefix = security_rule.value["destination_address_prefix"]
+    }
+  }
+  tags = var.tags
+}
+/*
+resource "azurerm_subnet_network_security_group_association" "nsgforsubnet" {
+  for_each                  = azurerm_subnet.subnet
+  subnet_id                 = each.value.id
+  network_security_group_id = azurerm_network_security_group.nsg[each.value.name].id
+}*/
+
 /*
 data "azurerm_subnet" "import" {
   for_each             = var.nsg_ids
